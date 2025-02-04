@@ -22,13 +22,26 @@ find_package(OpenCV REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(message_filters REQUIRED)
-
+find_package(PCL REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(image_geometry REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(vision_msgs REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
 # Include directories
-include_directories(${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+include_directories(
+  include
+  ${OpenCV_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+
+)
 
 # Add executable for the main depth map node
 add_executable(depth_map_detection_localization src/depth_map_detection_localization.cpp)
 add_executable(l2d_pose_node src/l2d_pose_node.cpp)
+add_executable(lidar_camera_fusion_with_detection src/lidar_camera_fusion_with_detection.cpp)
+add_executable(l2i_pose_node src/l2i_pose_node.cpp)
 
 # Link libraries
 target_link_libraries(depth_map_detection_localization 
@@ -41,6 +54,17 @@ target_link_libraries(l2d_pose_node
   ${PCL_LIBRARIES} 
   ${OpenCV_LIBS} 
 )
+target_link_libraries(l2i_pose_node 
+  ${PCL_LIBRARIES} 
+  ${OpenCV_LIBS} 
+)
+# Link additional libraries
+target_link_libraries(lidar_camera_fusion_with_detection
+  ${OpenCV_LIBRARIES}
+  ${Eigen3_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
+
 ament_target_dependencies(
   depth_map_detection_localization
   rclcpp
@@ -73,6 +97,40 @@ ament_target_dependencies(
   yolo_msgs
   multi_target_kf
 )
+ament_target_dependencies(
+  l2i_pose_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  cv_bridge
+  OpenCV
+  pcl_conversions
+  pcl_ros
+  message_filters
+  yolo_msgs
+  multi_target_kf
+)
+# Specify libraries to link a library or executable target against
+ament_target_dependencies(
+  lidar_camera_fusion_with_detection
+  rclcpp
+  sensor_msgs
+  vision_msgs
+  geometry_msgs
+  tf2_ros
+  tf2_sensor_msgs
+  tf2_geometry_msgs
+  tf2_eigen
+  pcl_conversions
+  cv_bridge
+  image_geometry
+  OpenCV
+  yolo_msgs
+  message_filters
+)
 # Install the targets
 install(TARGETS 
   depth_map_detection_localization 
@@ -86,6 +144,10 @@ install(DIRECTORY launch/
 # Install the targets
 install(TARGETS 
   l2d_pose_node
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS 
+  l2i_pose_node
   DESTINATION lib/${PROJECT_NAME})
 
 # Install launch files
@@ -121,4 +183,10 @@ install(PROGRAMS
   scripts/trajectories.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+install(TARGETS
+  lidar_camera_fusion_with_detection
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

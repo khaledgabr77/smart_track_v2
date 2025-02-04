@@ -14,6 +14,18 @@
   <depend>cv_bridge</depend>
   <depend>OpenCV</depend>
   <depend>PCL</depend>
+  <depend>vision_msgs</depend>
+  <depend>pcl_ros</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_sensor_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>tf2_eigen</depend>
+  <depend>pcl_conversions</depend>
+  <depend>yolo_msgs</depend>
+  <depend>image_geometry</depend>
+  <depend>opencv</depend>
+  <depend>message_filters</depend>
   <build_depend>multi_target_kf</build_depend>
   <exec_depend>multi_target_kf</exec_depend>
   <exec_depend>launch</exec_depend>
