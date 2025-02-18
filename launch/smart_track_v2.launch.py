@@ -71,7 +71,8 @@ def generate_launch_description():
             'config_yaml': config_file_path,
             'base_link_frame': 'observer/base_link',
             'odom_frame': 'observer/odom',
-            'map_frame': 'map'
+            'map_frame': 'map',
+            'use_sim_time' : 'True'
         }.items()
     )
 
@@ -82,7 +83,8 @@ def generate_launch_description():
         arguments=[
             xpos['xpos'], ypos['ypos'], zpos['zpos'], '0.0', '0', '0',
             'map', f"{ns}/odom"
-        ]
+        ],
+        parameters=[{'use_sim_time': True}]
     )
 
     cam_tf_node = Node(
@@ -91,7 +93,8 @@ def generate_launch_description():
         arguments=[
             '0.1', '0', '0.13', '1.5708', '0', '1.5708',
             f"{ns}/base_link", f"{ns}/camera_link"
-        ]
+        ],
+        parameters=[{'use_sim_time': True}]
     )
 
     lidar_tf_node = Node(
@@ -100,7 +103,8 @@ def generate_launch_description():
         arguments=[
             '0', '0', '0.295', '0', '0', '0',
             f"{ns}/base_link", f"x500_lidar_camera_1/lidar_link/gpu_lidar"
-        ]
+        ],
+        parameters=[{'use_sim_time': True}]
     )
 
     # ROS-GZ Bridge Node
@@ -120,13 +124,16 @@ def generate_launch_description():
             '-r', '/rgb_image:=' + ns + '/rgb_image',
             '-r', '/camera_info:=' + ns + '/camera_info',
         ],
+        parameters=[{'use_sim_time': True}]
     )
 
     # RViz2 Node
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
-        arguments=['-d', '/home/user/shared_volume/ros2_ws/src/smart_track_v2/rviz/l2i.rviz']
+        arguments=['-d', '/home/user/shared_volume/ros2_ws/src/smart_track_v2/rviz/l2i.rviz'
+                   ], # l2i.rviz
+        parameters=[{'use_sim_time': True}]
     )
 
     # Depth Map Detection and Localization Node
@@ -141,6 +148,7 @@ def generate_launch_description():
                 'ScaleVector': 4.0,
                 'MinDepth': 0.2,
                 'MaxDepth': 30.0,
+                'use_sim_time': True
             }
         ],
         remappings=[
@@ -159,6 +167,7 @@ def generate_launch_description():
                 'std_range': 5.0,
                 'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
                 'reference_frame': 'observer/odom',
+                'use_sim_time': True
             }
         ],
         remappings=[
@@ -177,7 +186,8 @@ def generate_launch_description():
         parameters=[
             {'min_range': 0.2, 'max_range': 10.0,
             'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
-            'camera_frame': 'observer/camera_link'}
+            'camera_frame': 'observer/camera_link',
+            'use_sim_time': True}
         ],
         remappings=[
             ('/observer/lidar_points', '/observer/lidar_points'),
@@ -197,6 +207,7 @@ def generate_launch_description():
                 'std_range': 5.0,
                 'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
                 'reference_frame': 'observer/odom',
+                'use_sim_time': True
             }
         ],
     )
@@ -215,7 +226,7 @@ def generate_launch_description():
             # 'input_image_topic': 'depth_map',
             'input_image_topic': '/observer/rgb_image',
             'namespace': '',
-            'device': 'cuda:0'
+            'device': 'cuda:0',
         }.items()
     )
 
@@ -230,7 +241,8 @@ def generate_launch_description():
         launch_arguments={
             'detections_topic': 'final_fused_pose',
             'kf_ns': '',
-            'kf_yaml': os.path.join(package_share_directory, 'kf_param.yaml'),
+            'use_sim_time' : 'True',
+            'kf_yaml': os.path.join(package_share_directory,'config','kf', 'kf_param.yaml'),
         }.items()
     )
 
@@ -243,8 +255,8 @@ def generate_launch_description():
     ld.add_action(mavros_launch)
     ld.add_action(rviz_node)
     # ld.add_action(depth_map_detection_localization_node)
-    ld.add_action(yolo_launch_depth_map)
     # ld.add_action(l2d_pose_node)
+    ld.add_action(yolo_launch_depth_map)
     ld.add_action(kf_launch)
     ld.add_action(lidar_camera_fusion_node)
     ld.add_action(l2i_pose_node)
