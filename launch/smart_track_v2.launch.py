@@ -131,7 +131,7 @@ def generate_launch_description():
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
-        arguments=['-d', '/home/user/shared_volume/ros2_ws/src/smart_track_v2/rviz/l2i.rviz'
+        arguments=['-d', '/home/user/shared_volume/ros2_ws/src/smart_track_v2/rviz/l2d.rviz'
                    ], # l2i.rviz
         parameters=[{'use_sim_time': True}]
     )
@@ -204,7 +204,7 @@ def generate_launch_description():
         name='l2i_pose_node',
         parameters=[
             {
-                'std_range': 5.0,
+                'std_scaler': 10.0,
                 'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
                 'reference_frame': 'observer/odom',
                 'use_sim_time': True
@@ -220,11 +220,11 @@ def generate_launch_description():
             ])
         ]),
         launch_arguments={
-            'model': '/home/user/shared_volume/ros2_ws/src/smart_track_v2/config/rgb.pt',
-            # 'model': '/home/user/shared_volume/ros2_ws/src/smart_track_v2/config/depth.pt',
+            # 'model': '/home/user/shared_volume/ros2_ws/src/smart_track_v2/config/drone_detection_v3.pt',
+            'model': '/home/user/shared_volume/ros2_ws/src/smart_track_v2/config/depth.pt',
             'threshold': '0.5',
-            # 'input_image_topic': 'depth_map',
-            'input_image_topic': '/observer/rgb_image',
+            'input_image_topic': 'depth_map',
+            # 'input_image_topic': '/observer/rgb_image',
             'namespace': '',
             'device': 'cuda:0',
         }.items()
@@ -254,10 +254,10 @@ def generate_launch_description():
     ld.add_action(ros_gz_bridge)
     ld.add_action(mavros_launch)
     ld.add_action(rviz_node)
-    # ld.add_action(depth_map_detection_localization_node)
-    # ld.add_action(l2d_pose_node)
+    ld.add_action(depth_map_detection_localization_node)
+    ld.add_action(l2d_pose_node)
     ld.add_action(yolo_launch_depth_map)
     ld.add_action(kf_launch)
-    ld.add_action(lidar_camera_fusion_node)
-    ld.add_action(l2i_pose_node)
+    # ld.add_action(lidar_camera_fusion_node)
+    # ld.add_action(l2i_pose_node)
     return ld

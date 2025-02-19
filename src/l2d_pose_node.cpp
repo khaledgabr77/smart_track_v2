@@ -73,6 +73,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 
+// PCL
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl/conversions.h>
+#include <pcl_ros/transforms.hpp>  // Or <pcl_ros/point_cloud.h> if needed
+#include <pcl/filters/crop_box.h>
+#include <pcl/common/centroid.h>
+
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+
 using namespace std::placeholders;
 
 /**
@@ -208,11 +220,14 @@ public:
     lidar_frame_ = this->get_parameter("lidar_frame").as_string();
 
     // A parameter controlling how big the depth range is around the KF's z
-    this->declare_parameter<double>("std_range", 5.0);
-    std_range_ = this->get_parameter("std_range").as_double();
+    this->declare_parameter<double>("std_scaler", 5.0);
+    std_scaler_ = this->get_parameter("std_scaler").as_double();
 
     this->declare_parameter<std::string>("reference_frame", "map");
     reference_frame_ = this->get_parameter("reference_frame").as_string();
+
+    this->declare_parameter<bool>("yolo_measurement_only", true);
+    this->declare_parameter<bool>("kf_feedback", true);
 
     // TF buffer + listener
     tf_buffer_   = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -251,7 +266,9 @@ public:
     // Publisher: PoseArray
     fused_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
       "/final_fused_pose", 10);
-
+    // Create a publisher for the bounding boxes visualization markers
+    marker_array_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
+      "/kf_bounding_boxes", 10);
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
@@ -269,8 +286,8 @@ private:
   void processAndStoreTrackData(const multi_target_kf::msg::KFTracks::ConstSharedPtr &kftracks_msg)
   {
     latest_positions_.clear();
-    latest_covariances_3d_.clear();
-    latest_depth_ranges_.clear();
+    // latest_covariances_3d_.clear();
+    latest_std_.clear();
 
     if (kftracks_msg->tracks.empty()) {
       RCLCPP_INFO(this->get_logger(), "No KF tracks found in message.");
@@ -316,26 +333,41 @@ private:
       double y = track_pose_out.pose.pose.position.y;
       double z = track_pose_out.pose.pose.position.z;
 
-      const auto &cov = track_pose_out.pose.covariance;
-      double cov_x = cov[0];   // diagonal for x
-      double cov_y = cov[7];   // diagonal for y
-      double cov_z = cov[14];  // diagonal for z
-
-      if (cov_x < 0.0 || cov_y < 0.0 || cov_z < 0.0) {
+      // const auto &cov = track_pose_out.pose.covariance;
+      Eigen::Matrix3d sub_cov = Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>>(track_pose_out.pose.covariance.data()).topLeftCorner<3, 3>();
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(sub_cov);
+      if (solver.info() != Eigen::Success) {
+        // Handle numerical failure...
         RCLCPP_WARN(this->get_logger(),
-          "[processAndStoreTrackData] Negative variance -> skip track.");
-        continue;
+          "[processAndStoreTrackData] Eigen decomposition failed! -> skip track.");
+        continue ;
       }
 
-      // Based on z ± std_range_ * sigma_z
-      double sigma_z = std::sqrt(cov_z);
-      double depth_min = std::max(0.0, z - std_range_ * sigma_z);
-      double depth_max = z + std_range_ * sigma_z;
+      // The eigenvalues are returned in increasing order for SelfAdjointEigenSolver.
+      Eigen::Vector3d eigen_values = solver.eigenvalues();
+      double max_eigen_value = eigen_values.maxCoeff();
+      if (max_eigen_value < 0)
+      {
+        RCLCPP_WARN(this->get_logger(),
+          "[processAndStoreTrackData] Negative variance -> skip track.");
+          continue ;
+      }
+
+      // DEBUG
+      // std::cout << "Eigenvalues: " << eigen_values.transpose() << std::endl;
+      // std::cout << "Max eigenvalue: " << max_eigen_value << std::endl;
+
+
+      // The maximum standard deviation of all axes
+      double max_std = std::sqrt(max_eigen_value);
+
+      // double roi_min = std::max(0.0, z - std_scaler_ * sigma_z);
+      // double roi_max = z + std_scaler_ * sigma_z;
 
       // Store them for later LiDAR-based averaging in kfProcessPoses()
       latest_positions_.push_back({x, y, z});
-      latest_covariances_3d_.push_back({cov_x, cov_y, cov_z});
-      latest_depth_ranges_.push_back({depth_min, depth_max});
+      // latest_covariances_3d_.push_back({cov_x, cov_y, cov_z});
+      latest_std_.push_back(max_std);
     }
   }
 
@@ -352,8 +384,11 @@ private:
       return std::nullopt;
     }
 
+    // Clear the MarkerArray from any previous iteration
+    marker_array_.markers.clear();
+    
     // Basic check
-    if (latest_positions_.size() != latest_depth_ranges_.size()) {
+    if (latest_positions_.size() != latest_std_.size()) {
       RCLCPP_WARN(this->get_logger(),
         "[kfProcessPoses] Mismatch in positions vs. depth ranges.");
       return std::nullopt;
@@ -380,48 +415,63 @@ private:
     fused_pose_array.header.stamp = kftracks_msg->header.stamp;
     fused_pose_array.header.frame_id = reference_frame_;
 
-    // Loop over each "track" we stored
+    // 1. Convert ROS msg to PCL
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::fromROSMsg(*lidar_msg, *pcl_cloud);
+
+    // Loop over each track
     for (size_t i = 0; i < latest_positions_.size(); ++i) {
-      double z_min = latest_depth_ranges_[i][0];
-      double z_max = latest_depth_ranges_[i][1];
+      // The current track's center position
+      double cx = latest_positions_[i][0];
+      double cy = latest_positions_[i][1];
+      double cz = latest_positions_[i][2];
 
-      double sum_x = 0.0;
-      double sum_y = 0.0;
-      double sum_z = 0.0;
-      size_t count = 0;
+      // Single standard deviation for this track
+      double std_dev = latest_std_[i];  // e.g. 1σ
 
-      // Re-iterate entire pointcloud
-      sensor_msgs::PointCloud2ConstIterator<float> x_it(*lidar_msg, "x");
-      sensor_msgs::PointCloud2ConstIterator<float> y_it(*lidar_msg, "y");
-      sensor_msgs::PointCloud2ConstIterator<float> z_it(*lidar_msg, "z");
+      // Define scaled-width of our box
+      double scaled_w = std_scaler_ * std_dev;  // scaled std
+      // DEBUG
+      RCLCPP_INFO(this->get_logger(), "[kfProcessPoses] scaled_w: %f", scaled_w);
 
-      for (; x_it != x_it.end(); ++x_it, ++y_it, ++z_it) {
-        float px = *x_it;
-        float py = *y_it;
-        float pz = *z_it;
+      // Create CropBox filter
+      pcl::CropBox<pcl::PointXYZ> crop_filter;
+      crop_filter.setInputCloud(pcl_cloud);
 
-        if (pz >= z_min && pz <= z_max) {
-          sum_x += px;
-          sum_y += py;
-          sum_z += pz;
-          count++;
-        }
+      // Set bounding box
+      Eigen::Vector4f min_pt(cx - scaled_w, cy - scaled_w, cz - scaled_w, 1.0f);
+      Eigen::Vector4f max_pt(cx + scaled_w, cy + scaled_w, cz + scaled_w, 1.0f);
+      crop_filter.setMin(min_pt);
+      crop_filter.setMax(max_pt);
+
+      // Filter the cloud
+      pcl::PointCloud<pcl::PointXYZ>::Ptr cropped_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+      crop_filter.filter(*cropped_cloud);
+
+      // Compute the average if we have any points
+      Eigen::Vector4f centroid;
+      bool success = pcl::compute3DCentroid(*cropped_cloud, centroid);
+      double avg_x = 0.0, avg_y = 0.0, avg_z = 0.0;
+      if (success) {
+        // centroid[0], centroid[1], centroid[2] => x, y, z
+        avg_x = static_cast<double>(centroid[0]);
+        avg_y = static_cast<double>(centroid[1]);
+        avg_z = static_cast<double>(centroid[2]);
+
+        RCLCPP_INFO(this->get_logger(), "[kfProcessPoses] Centroid: [%f, %f, %f]", avg_x, avg_y, avg_z);
+      } else {
+        RCLCPP_WARN(this->get_logger(), "[kfProcessPoses] Could not compute centroid (empty or invalid cloud?) for this track");
+        continue;
       }
 
-      // Update the track if any LiDAR points matched
-      if (count > 0) {
-        latest_positions_[i][0] = sum_x / count;
-        latest_positions_[i][1] = sum_y / count;
-        latest_positions_[i][2] = sum_z / count;
-      }
 
-      // Build PoseStamped in LiDAR frame
+      // Build PoseStamped in the LiDAR frame
       geometry_msgs::msg::PoseStamped fused_pose_lidar;
       fused_pose_lidar.header.stamp = kftracks_msg->header.stamp;
-      fused_pose_lidar.header.frame_id = lidar_frame_;
-      fused_pose_lidar.pose.position.x = latest_positions_[i][0];
-      fused_pose_lidar.pose.position.y = latest_positions_[i][1];
-      fused_pose_lidar.pose.position.z = latest_positions_[i][2];
+      fused_pose_lidar.header.frame_id = lidar_msg->header.frame_id;  // The LiDAR frame
+      fused_pose_lidar.pose.position.x = avg_x;
+      fused_pose_lidar.pose.position.y = avg_y;
+      fused_pose_lidar.pose.position.z = avg_z;
       fused_pose_lidar.pose.orientation.x = 0.0;
       fused_pose_lidar.pose.orientation.y = 0.0;
       fused_pose_lidar.pose.orientation.z = 0.0;
@@ -431,16 +481,90 @@ private:
       geometry_msgs::msg::PoseStamped fused_pose_ref;
       try {
         tf2::doTransform(fused_pose_lidar, fused_pose_ref, transform_lidar_to_ref);
-      }
-      catch (const std::exception & e) {
+      } catch (const std::exception & e) {
         RCLCPP_ERROR(this->get_logger(),
-          "[kfProcessPoses] Exception while transforming pose: %s", e.what());
+                     "[kfProcessPoses] Exception while transforming pose: %s", e.what());
         continue;
       }
 
       // Add to the PoseArray
       fused_pose_array.poses.push_back(fused_pose_ref.pose);
-    }
+
+      // --------------------------
+      //  CREATE BOUNDING-BOX MARKER
+      // --------------------------
+      // We want to transform the corner points min_pt and max_pt from LiDAR -> reference frame
+      // to get an axis-aligned bounding box in reference frame.
+      // In practice, because the frames might be rotated, the bounding box in the reference frame
+      // might no longer be axis-aligned. If you prefer to visualize it axis-aligned in the LiDAR frame,
+      // you can simply set `marker.header.frame_id = lidar_frame_`. 
+      // But here we do it in the reference frame for consistency.
+      
+      // 1) Transform min and max corners to reference frame
+      geometry_msgs::msg::Point pt_min_ref, pt_max_ref;
+
+      // Helper to transform an Eigen::Vector4f into geometry_msgs::msg::Point in ref frame
+      auto transformPoint = [&](const Eigen::Vector4f &pt_lidar) {
+        geometry_msgs::msg::PointStamped in, out;
+        in.header.frame_id = lidar_frame_;
+        in.point.x = pt_lidar.x();
+        in.point.y = pt_lidar.y();
+        in.point.z = pt_lidar.z();
+        // Transform to reference
+        tf2::doTransform(in, out, transform_lidar_to_ref);
+        return out.point;
+      };
+
+      pt_min_ref = transformPoint(min_pt);
+      pt_max_ref = transformPoint(max_pt);
+
+      // 2) Calculate the center (in ref frame) of that bounding box
+      geometry_msgs::msg::Point box_center;
+      box_center.x = 0.5 * (pt_min_ref.x + pt_max_ref.x);
+      box_center.y = 0.5 * (pt_min_ref.y + pt_max_ref.y);
+      box_center.z = 0.5 * (pt_min_ref.z + pt_max_ref.z);
+
+      // 3) Box scale = difference in x, y, z
+      double dx = std::fabs(pt_max_ref.x - pt_min_ref.x);
+      double dy = std::fabs(pt_max_ref.y - pt_min_ref.y);
+      double dz = std::fabs(pt_max_ref.z - pt_min_ref.z);
+
+      // 4) Create the Marker
+      visualization_msgs::msg::Marker marker;
+      marker.header.stamp = this->now();
+      marker.header.frame_id = reference_frame_;
+      marker.ns = "kf_bounding_box";
+      marker.id = static_cast<int>(i);  // unique ID for each track
+
+      marker.type = visualization_msgs::msg::Marker::CUBE;
+      marker.action = visualization_msgs::msg::Marker::ADD;
+
+      // Marker position (center of the bounding box)
+      marker.pose.position.x = box_center.x;
+      marker.pose.position.y = box_center.y;
+      marker.pose.position.z = box_center.z;
+
+      // Orientation: for an axis-aligned bounding box in the reference frame,
+      // we keep the orientation as identity (0,0,0,1).
+      marker.pose.orientation.w = 1.0;
+
+      // Size
+      marker.scale.x = dx;
+      marker.scale.y = dy;
+      marker.scale.z = dz;
+
+      // Color & transparency (RGBA)
+      marker.color.r = 1.0f;   // Red
+      marker.color.g = 0.0f;
+      marker.color.b = 0.0f;
+      marker.color.a = 0.3f;   // 30% opacity -> semi-transparent
+
+      // Lifetime: 0 = forever
+      marker.lifetime = rclcpp::Duration(0, 0);
+
+      marker_array_.markers.push_back(marker);
+    } // end for each track
+
 
     if (fused_pose_array.poses.empty()) {
       return std::nullopt;
@@ -497,7 +621,7 @@ private:
       }
     }
 
-    depth_pose_msg_ = std::make_shared<geometry_msgs::msg::PoseArray>(transformed_pose_array);
+    objects_pose_msg_ = std::make_shared<geometry_msgs::msg::PoseArray>(transformed_pose_array);
   }
 
   // Synchronized callback (multi_target_kf::KFTracks + Lidar points)
@@ -512,62 +636,82 @@ private:
     processAndStoreTrackData(kftracks_msg);
   }
 
-  // Timer to decide which PoseArray (detection or KF) to publish
+  // Timer callback
   void timerCallback()
   {
-
-    // RCLCPP_INFO(this->get_logger(),
-    // "[timerCallback] INSIDE TIMERCALLBAK.");
-
+    bool use_yolo = this->get_parameter("yolo_measurement_only").as_bool();
+    bool use_kf   = this->get_parameter("kf_feedback").as_bool();
+    // Check whether new detection or KF data arrived
     bool detectionUpdated = isNewDetections();
     bool kfUpdated        = isNewKfTracks();
 
-    // 1) If new detections arrived, publish them (priority)
-    if (detectionUpdated && depth_pose_msg_) {
-      fused_pose_pub_->publish(*depth_pose_msg_);
-      // RCLCPP_INFO(this->get_logger(),
-      // "[timerCallback] fused_pose_pub_ DETECTION PUBLISHING.");
-      // if (debug_) {
-      //   RCLCPP_INFO(this->get_logger(),
-      //     "[timerCallback] Published new depth-based PoseArray (detection).");
-      // }
-      return;
-    }
-    else if (detectionUpdated && !depth_pose_msg_) {
-      RCLCPP_WARN(this->get_logger(),
-        "[timerCallback] We got a new detection, but depth_pose_msg_ is null!");
-      return;
-    }
-
-    // 2) If new KF tracks arrived, publish them
-    if (kfUpdated) {
-      if (!latest_kftracks_msg_ || !last_lidar_msg_) {
-        RCLCPP_WARN(this->get_logger(),
-          "[timerCallback] Missing KF or lidar data, cannot publish fused pose.");
+    if(use_yolo){
+      // 1) If new detections arrived, publish them (priority)
+      if (detectionUpdated && objects_pose_msg_) {
+        fused_pose_pub_->publish(*objects_pose_msg_);
+        //DEBUG
+        RCLCPP_INFO(this->get_logger(),
+        "[timerCallback] Got detection. Publishing directly to KF.");
+        // if (debug_) {
+        //   RCLCPP_INFO(this->get_logger(),
+        //     "[timerCallback] Published new depth-based PoseArray (detection).");
+        // }
         return;
       }
-
-      auto kf_pose_array_opt = kfProcessPoses(latest_kftracks_msg_, last_lidar_msg_);
-      if (kf_pose_array_opt) {
-        fused_pose_pub_->publish(kf_pose_array_opt.value());
-        // RCLCPP_INFO(this->get_logger(),
-        // "[timerCallback] fused_pose_pub_ KF PUBLISHING.");
-        if (debug_) {
-          RCLCPP_INFO(this->get_logger(),
-            "[timerCallback] Published new KF-based PoseArray with %zu poses.",
-            kf_pose_array_opt->poses.size());
-        }
-      } else {
+      else if (detectionUpdated && !objects_pose_msg_) {
         RCLCPP_WARN(this->get_logger(),
-          "[timerCallback] Got new KF tracks but no valid fused pose from them!");
+          "[timerCallback] We got a new detection, but objects_pose_msg_ is null!");
+        return;
+      }
+  }
+    if(use_kf){
+      // 2) If new KF tracks arrived, publish them
+      if (kfUpdated) {
+        // DEBUG
+        RCLCPP_INFO(this->get_logger(),
+        "[timerCallback] Trying KF feedback.");
+
+        if (!latest_kftracks_msg_ || !last_lidar_msg_) {
+          RCLCPP_WARN(this->get_logger(),
+            "[timerCallback] Missing KF or lidar data, cannot publish fused pose.");
+          return;
+        }
+
+        auto kf_pose_array_opt = kfProcessPoses(latest_kftracks_msg_, last_lidar_msg_);
+        if (kf_pose_array_opt) {
+          fused_pose_pub_->publish(kf_pose_array_opt.value());
+          marker_array_pub_->publish(marker_array_);
+          // RCLCPP_INFO(this->get_logger(),
+          // "[timerCallback] fused_pose_pub_ KF PUBLISHING.");
+          if (debug_) {
+            RCLCPP_INFO(this->get_logger(),
+              "[timerCallback] Published new KF-based PoseArray with %zu poses.",
+              kf_pose_array_opt->poses.size());
+          }
+        } else {
+          RCLCPP_WARN(this->get_logger(),
+            "[timerCallback] Got new KF tracks but no valid fused pose from them!");
+        }
+      }
+      else
+      {
+        RCLCPP_WARN(this->get_logger(),
+            "[timerCallback] No new KF feedback!");
       }
     }
   }
+  // Convert ROS2 stamp to double seconds
+  inline double timeToSec(const builtin_interfaces::msg::Time & stamp)
+  {
+    return static_cast<double>(stamp.sec) +
+          static_cast<double>(stamp.nanosec) / 1e9;
+  }
 
-  // Check if we have a new detection message
   bool isNewDetections()
   {
-    if (!latest_detections_msg_) return false;
+    if (!latest_detections_msg_) {
+      return false;
+    }
     if (!latest_detections_msg_->detections.empty()) {
       double t = timeToSec(latest_detections_msg_->header.stamp);
       if (t > last_detection_t_) {
@@ -578,13 +722,17 @@ private:
     return false;
   }
 
-  // Check if we have a new KF track message
   bool isNewKfTracks()
   {
-    if (!latest_kftracks_msg_) return false;
+    if (!latest_kftracks_msg_) {
+      return false;
+    }
     if (!latest_kftracks_msg_->tracks.empty()) {
       double t = timeToSec(latest_kftracks_msg_->header.stamp);
-      if (t > last_kf_measurements_t_) {
+      // IMPORTANT: Add the extra check that matches Python:
+      //   if (t > last_kf_measurements_t_ AND t > last_detection_t_)
+      // so we only consider KF if it’s newer than the last detection.
+      if ((t > last_kf_measurements_t_) && (t > last_detection_t_)) {
         last_kf_measurements_t_ = t;
         return true;
       }
@@ -592,11 +740,12 @@ private:
     return false;
   }
 
+
 private:
   // Parameters
   bool        debug_{false};
   std::string lidar_frame_;
-  double      std_range_{5.0};
+  double      std_scaler_{5.0};
   std::string reference_frame_;
 
   // Timestamps for detection and KF
@@ -605,7 +754,7 @@ private:
 
   // Stored messages
   yolo_msgs::msg::DetectionArray::SharedPtr latest_detections_msg_;
-  geometry_msgs::msg::PoseArray::SharedPtr depth_pose_msg_;
+  geometry_msgs::msg::PoseArray::SharedPtr objects_pose_msg_;
   multi_target_kf::msg::KFTracks::ConstSharedPtr latest_kftracks_msg_;
   sensor_msgs::msg::PointCloud2::ConstSharedPtr last_lidar_msg_;
 
@@ -628,14 +777,17 @@ private:
 
   // Publisher
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr fused_pose_pub_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_array_pub_;
 
   // Timer
   rclcpp::TimerBase::SharedPtr timer_;
 
   // Data from KF tracks (in LiDAR frame)
   std::vector<std::array<double,3>> latest_positions_;      // x,y,z
-  std::vector<std::array<double,3>> latest_covariances_3d_; // diag cov_x,cov_y,cov_z
-  std::vector<std::array<double,2>> latest_depth_ranges_;   // z_min,z_max
+  // std::vector<std::array<double,3>> latest_covariances_3d_; // diag cov_x,cov_y,cov_z
+  std::vector<double> latest_std_;   // roi_min, roi_max
+  // A marker array to hold your bounding boxes
+  visualization_msgs::msg::MarkerArray marker_array_;
 };
 
 // main

@@ -97,6 +97,7 @@ ament_target_dependencies(
   message_filters
   yolo_msgs
   multi_target_kf
+  visualization_msgs
 )
 ament_target_dependencies(
   l2i_pose_node
