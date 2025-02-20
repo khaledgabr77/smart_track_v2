@@ -27,7 +27,7 @@ def generate_launch_description():
     xpos = {'xpos': '0.0'}
     ypos = {'ypos': '0.0'}
     zpos = {'zpos': '0.1'}
-    headless = {'headless': '0'}
+    headless = {'headless': '1'}
 
     # PX4 SITL + Gazebo Simulation Launch
     gz_launch = IncludeLaunchDescription(
@@ -160,11 +160,11 @@ def generate_launch_description():
     # L2D Pose Node
     l2d_pose_node = Node(
         package='smart_track_v2',
-        executable='l2d_pose_node',
+        executable='smart_track_node',
         name='l2d_pose_node',
         parameters=[
             {
-                'std_scaler': 5.0,
+                'std_scaler': 10.0,
                 'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
                 'reference_frame': 'observer/odom',
                 'use_sim_time': True

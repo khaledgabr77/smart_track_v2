@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Lidar Point Cloud1/Topic1
-        - /MarkerArray1
       Splitter Ratio: 0.5
     Tree Height: 359
   - Class: rviz_common/Selection
@@ -223,7 +222,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: MarkerArray
+      Name: KF Bounding Box
       Namespaces:
         kf_bounding_box: true
       Topic:
@@ -279,7 +278,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 15.05098819732666
+      Distance: 19.04192352294922
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -294,10 +293,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4753981828689575
+      Pitch: 0.5303981304168701
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.880398154258728
+      Yaw: 1.160398006439209
     Saved: ~
 Window Geometry:
   Detection Image - RGB:

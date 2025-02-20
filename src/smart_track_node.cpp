@@ -199,7 +199,7 @@ bool transformPoseWithCovariance(
 }
 
 /**
- * @class IntegratedLidarKFNode
+ * @class SmartTrackNode
  * @brief Example node that merges LiDAR data + Kalman Filter tracks + detection data
  *
  * - Subscribes to YOLO detections (publishes if new detection arrives).
@@ -208,10 +208,10 @@ bool transformPoseWithCovariance(
  *   and stores them for final multi-track updates.
  * - Publishes final PoseArray with either new detection poses or new KF poses.
  */
-class IntegratedLidarKFNode : public rclcpp::Node
+class SmartTrackNode : public rclcpp::Node
 {
 public:
-  IntegratedLidarKFNode() : Node("integrated_lidar_kf_node")
+  SmartTrackNode() : Node("integrated_lidar_kf_node")
   {
     // Declare/get parameters
     this->declare_parameter<bool>("debug", false);
@@ -241,11 +241,11 @@ public:
     // Subscriptions
     detection_sub_ = this->create_subscription<yolo_msgs::msg::DetectionArray>(
       "/tracking", 10,
-      std::bind(&IntegratedLidarKFNode::detectionCallback, this, _1));
+      std::bind(&SmartTrackNode::detectionCallback, this, _1));
 
     lidar_rgb_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
       "/detected_object_pose", 10,
-      std::bind(&IntegratedLidarKFNode::lidarRgbPoseCallback, this, _1));
+      std::bind(&SmartTrackNode::lidarRgbPoseCallback, this, _1));
 
     // Message filters for KF + Lidar
     kf_tracks_filter_.subscribe(this, "/kf/good_tracks");
@@ -262,7 +262,7 @@ public:
                                                         lidar_sub_);
 
     kftracks_lidar_sync_->registerCallback(
-      std::bind(&IntegratedLidarKFNode::kftracksLidarCallback, this, _1, _2));
+      std::bind(&SmartTrackNode::kftracksLidarCallback, this, _1, _2));
 
     // Publisher: PoseArray
     fused_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>(
@@ -275,7 +275,7 @@ public:
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
-      std::bind(&IntegratedLidarKFNode::timerCallback, this));
+      std::bind(&SmartTrackNode::timerCallback, this));
 
     RCLCPP_INFO(this->get_logger(), "Integrated Lidar+KF node started.");
   }
@@ -793,7 +793,7 @@ private:
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<IntegratedLidarKFNode>();
+  auto node = std::make_shared<SmartTrackNode>();
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;

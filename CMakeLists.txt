@@ -43,6 +43,8 @@ add_executable(depth_map_detection_localization src/depth_map_detection_localiza
 add_executable(l2d_pose_node src/l2d_pose_node.cpp)
 add_executable(lidar_camera_fusion_with_detection src/lidar_camera_fusion_with_detection.cpp)
 add_executable(l2i_pose_node src/l2i_pose_node.cpp)
+add_executable(results src/results.cpp)
+add_executable(smart_track_node src/smart_track_node.cpp)
 
 # Link libraries
 target_link_libraries(depth_map_detection_localization 
@@ -55,7 +57,13 @@ target_link_libraries(l2d_pose_node
   ${PCL_LIBRARIES} 
   ${OpenCV_LIBS} 
 )
+
 target_link_libraries(l2i_pose_node 
+  ${PCL_LIBRARIES} 
+  ${OpenCV_LIBS} 
+)
+
+target_link_libraries(smart_track_node 
   ${PCL_LIBRARIES} 
   ${OpenCV_LIBS} 
 )
@@ -66,6 +74,11 @@ target_link_libraries(lidar_camera_fusion_with_detection
   ${PCL_LIBRARIES}
 )
 
+target_link_libraries(results
+  ${OpenCV_LIBRARIES}
+  ${Eigen3_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
 ament_target_dependencies(
   depth_map_detection_localization
   rclcpp
@@ -99,8 +112,27 @@ ament_target_dependencies(
   multi_target_kf
   visualization_msgs
 )
+
 ament_target_dependencies(
   l2i_pose_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  cv_bridge
+  OpenCV
+  pcl_conversions
+  pcl_ros
+  message_filters
+  yolo_msgs
+  multi_target_kf
+  visualization_msgs
+)
+
+ament_target_dependencies(
+  smart_track_node
   rclcpp
   sensor_msgs
   geometry_msgs
@@ -134,17 +166,29 @@ ament_target_dependencies(
   yolo_msgs
   message_filters
 )
+
+# Specify libraries to link a library or executable target against
+ament_target_dependencies(
+  results
+  rclcpp
+  std_msgs
+  geometry_msgs
+  tf2_ros
+  multi_target_kf
+  
+)
+
 # Install the targets
 install(TARGETS 
   depth_map_detection_localization 
   DESTINATION lib/${PROJECT_NAME})
 
-# Install launch files
-install(DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/launch
+# Install the targets
+install(TARGETS
+  lidar_camera_fusion_with_detection
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install the targets
 install(TARGETS 
   l2d_pose_node
   DESTINATION lib/${PROJECT_NAME})
@@ -153,23 +197,15 @@ install(TARGETS
   l2i_pose_node
   DESTINATION lib/${PROJECT_NAME})
 
-# Install launch files
-install(DIRECTORY 
-          launch/ 
-  DESTINATION share/${PROJECT_NAME}/launch
-)
-install(
-  DIRECTORY
-    config/
-  DESTINATION share/${PROJECT_NAME}/config
-)
-# Install project RViz files
-install(
-  DIRECTORY
-    rviz/
-  DESTINATION share/${PROJECT_NAME}/rviz
-)
-# Install Python nodes
+install(TARGETS 
+  smart_track_node
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS 
+  results
+  DESTINATION lib/${PROJECT_NAME})
+
+  # Install Python nodes
 install(PROGRAMS
   scripts/gimbal_stabilizer.py
   DESTINATION lib/${PROJECT_NAME}
@@ -187,9 +223,21 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(TARGETS
-  lidar_camera_fusion_with_detection
-  DESTINATION lib/${PROJECT_NAME}
+# Install launch files
+install(DIRECTORY 
+          launch/ 
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+install(
+  DIRECTORY
+    config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+# Install project RViz files
+install(
+  DIRECTORY
+    rviz/
+  DESTINATION share/${PROJECT_NAME}/rviz
 )
 
 ament_package()

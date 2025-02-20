@@ -1,0 +1,35 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolov8_msgs/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolo_msgs/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/multi_target_kf/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros_extras/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros_msgs/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/libmavconn/include/**",
+        "/opt/ros/jazzy/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/l2i_fusion_detection/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/mavros/libmavconn/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/mavros/mavros/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/mavros/mavros_extras/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/mavros/mavros_msgs/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/multi_target_kf/include/**",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/src/smart_track_v2/include/**",
+        "include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

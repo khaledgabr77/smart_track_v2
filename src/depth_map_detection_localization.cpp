@@ -105,7 +105,7 @@ public:
             this->create_publisher<sensor_msgs::msg::Image>("/detected_object_depth_map", 10);
 
         detected_object_pose_publisher_ =
-            this->create_publisher<geometry_msgs::msg::PoseArray>("/detected_object_depthmap_pose", 10);
+            this->create_publisher<geometry_msgs::msg::PoseArray>("/detected_object_pose", 10);
 
         RCLCPP_INFO(this->get_logger(), "PointCloud to Depth Map Node has been started.");
     }

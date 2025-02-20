@@ -1,0 +1,26 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolov8_ros/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolov8_msgs/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolo_ros/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolo_msgs/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/smart_track/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/robot_perception/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/multi_target_kf/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolov8_ros/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolov8_msgs/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolo_ros/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/yolo_msgs/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/smart_track/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/robot_perception/lib/python3.10/site-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/multi_target_kf/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros/local/lib/python3.10/dist-packages",
+        "/home/khaled/smart_track_cuda_shared_volume/ros2_ws/install/mavros_msgs/local/lib/python3.10/dist-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ]
+}

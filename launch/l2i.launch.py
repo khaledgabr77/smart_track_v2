@@ -26,7 +26,7 @@ def generate_launch_description():
     instance_id = {'instance_id': '1'}
     xpos = {'xpos': '0.0'}
     ypos = {'ypos': '0.0'}
-    zpos = {'zpos': '0.1'}
+    zpos = {'zpos': '0.05'}
     headless = {'headless': '0'}
 
     # PX4 SITL + Gazebo Simulation Launch
@@ -155,20 +155,38 @@ def generate_launch_description():
         ]
     )
 
-    # L2D Pose Node
+    # # L2I Pose Node
+    # l2i_pose_node = Node(
+    #     package='smart_track_v2',
+    #     executable='l2i_pose_node',
+    #     name='l2i_pose_node',
+    #     parameters=[
+    #         {
+    #             'std_scaler': 10.0,
+    #             'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
+    #             'reference_frame': 'observer/odom',
+    #             'use_sim_time': True,
+    #             'debug': False
+    #         }
+    #     ],
+    # )
+
+    # L2I Pose Node
     l2i_pose_node = Node(
         package='smart_track_v2',
-        executable='l2i_pose_node',
+        executable='smart_track_node',
         name='l2i_pose_node',
         parameters=[
             {
                 'std_scaler': 10.0,
                 'lidar_frame': 'x500_lidar_camera_1/lidar_link/gpu_lidar',
                 'reference_frame': 'observer/odom',
-                'use_sim_time': True
+                'use_sim_time': True,
+                'debug': False
             }
         ],
     )
+
     # YOLO Launch for Depth Map Detection
     yolo_launch_depth_map = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([

@@ -19,7 +19,7 @@ def generate_launch_description():
     # For default world
     xpos = {'xpos': '4.0'}
     ypos = {'ypos': '0.0'}
-    zpos = {'zpos': '0.1'}
+    zpos = {'zpos': '0.05'}
     # For ihunter_world
     # xpos = {'xpos': '200.0'}
     # ypos = {'ypos': '100.0'}
@@ -89,16 +89,16 @@ def generate_launch_description():
     
     offboard_control_node = Node(
         package='smart_track_v2',
-        executable='offboard_control_node',
+        executable='offboard_control_node.py',
         name='offboard_control_node',
         output='screen',
         namespace=ns,
         parameters=[ {'trajectory_type': 'infty'},
                     {'system_id': 3},
-                    {'radius': 3.0},
+                    {'radius': 5.0},
                     {'omega': 0.5},
                     {'normal_vector': [0.0, 0.0, 1.0]},
-                    {'center': [10.0, 0.0, 10.0]},
+                    {'center': [0.0, 0.0, 10.0]},
         ],
         remappings=[
             ('mavros/state', 'mavros/state'),
@@ -128,7 +128,7 @@ def generate_launch_description():
     ld.add_action(gz_launch)
     # ld.add_action(px4_ros_node)
     ld.add_action(map2pose_tf_node)
-    # ld.add_action(offboard_control_node)
+    ld.add_action(offboard_control_node)
     ld.add_action(mavros_launch)
     # ld.add_action(quadcopter_marker_launch)
 

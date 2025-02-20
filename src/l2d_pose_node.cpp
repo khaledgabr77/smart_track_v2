@@ -560,7 +560,7 @@ private:
       marker.color.a = 0.3f;   // 30% opacity -> semi-transparent
 
       // Lifetime: 0 = forever
-      marker.lifetime = rclcpp::Duration(0, 0);
+      marker.lifetime = rclcpp::Duration(0, 5e8);
 
       marker_array_.markers.push_back(marker);
     } // end for each track

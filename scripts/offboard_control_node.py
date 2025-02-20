@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import rclpy
 import numpy as np
 from rclpy.node import Node
@@ -7,7 +9,7 @@ from rclpy.qos import QoSProfile, qos_profile_sensor_data, ReliabilityPolicy, Du
 from geometry_msgs.msg import PoseStamped, Point
 from nav_msgs.msg import Odometry, Path
 
-from .trajectories import Circle3D, Infinity3D
+from  trajectories import Circle3D, Infinity3D
 
 from visualization_msgs.msg import Marker
 

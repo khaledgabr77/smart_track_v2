@@ -74,6 +74,7 @@ def generate_launch_description():
     px4_sim_process = ExecuteProcess(
         cmd=[[
             'cd ',PX4_DIR ,' && ',
+            'HEADLESS=', headless,
             'PX4_SYS_AUTOSTART=', px4_autostart_id,
             ' PX4_GZ_MODEL=', gz_model_name,
             ' PX4_UXRCE_DDS_NS=',namespace,
