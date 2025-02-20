@@ -278,10 +278,6 @@ public:
       "kf_feedback_enabled", 
       rclcpp::QoS(10)
     );
-    feedback_timer_ = this->create_wall_timer(
-      std::chrono::seconds(1),
-      std::bind(&SmartTrackNode::publishKFFeedbackEnabled, this)
-    );
     
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
@@ -701,6 +697,7 @@ private:
         auto kf_pose_array_opt = kfProcessPoses(latest_kftracks_msg_, last_lidar_msg_);
         if (kf_pose_array_opt) {
           fused_pose_pub_->publish(kf_pose_array_opt.value());
+          publishKFFeedbackEnabled(1);
           marker_array_pub_->publish(marker_array_);
           // RCLCPP_INFO(this->get_logger(),
           // "[timerCallback] fused_pose_pub_ KF PUBLISHING.");
@@ -712,6 +709,7 @@ private:
         } else {
           RCLCPP_WARN(this->get_logger(),
             "[timerCallback] Got new KF tracks but no valid fused pose from them!");
+            publishKFFeedbackEnabled(0);
         }
       }
       else
@@ -752,11 +750,10 @@ private:
   /**
    * @brief Publish 'kf_feedback_enabled' as 0 or 1 depending on the 'kf_feedback' parameter.
   */
-  void publishKFFeedbackEnabled()
+  void publishKFFeedbackEnabled(int8_t value)
   {
-    bool use_kf = this->get_parameter("kf_feedback").as_bool();
     std_msgs::msg::Int8 msg;
-    msg.data = use_kf ? 1 : 0;
+    msg.data = value;
     kf_feedback_enabled_pub_->publish(msg);
   }
 
@@ -811,7 +808,6 @@ private:
 
   // Member variables:
   rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr kf_feedback_enabled_pub_;
-  rclcpp::TimerBase::SharedPtr feedback_timer_;
 };
 
 // main
