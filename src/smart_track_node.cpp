@@ -47,7 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rclcpp/duration.hpp>
 #include <rclcpp/clock.hpp>
 #include <rclcpp/timer.hpp>
-
+#include <std_msgs/msg/int8.hpp>
+#include <std_msgs/msg/bool.hpp>
 // TF2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -272,6 +273,16 @@ public:
     marker_array_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
       "/kf_bounding_boxes", 10);
 
+    // Create a publisher for the 'kf_feedback_enabled' topic
+    kf_feedback_enabled_pub_ = this->create_publisher<std_msgs::msg::Int8>(
+      "kf_feedback_enabled", 
+      rclcpp::QoS(10)
+    );
+    feedback_timer_ = this->create_wall_timer(
+      std::chrono::seconds(1),
+      std::bind(&SmartTrackNode::publishKFFeedbackEnabled, this)
+    );
+    
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
@@ -738,6 +749,16 @@ private:
     }
     return false;
   }
+  /**
+   * @brief Publish 'kf_feedback_enabled' as 0 or 1 depending on the 'kf_feedback' parameter.
+  */
+  void publishKFFeedbackEnabled()
+  {
+    bool use_kf = this->get_parameter("kf_feedback").as_bool();
+    std_msgs::msg::Int8 msg;
+    msg.data = use_kf ? 1 : 0;
+    kf_feedback_enabled_pub_->publish(msg);
+  }
 
 private:
   // Parameters
@@ -787,6 +808,10 @@ private:
 
   // A marker array to hold your bounding boxes
   visualization_msgs::msg::MarkerArray marker_array_;
+
+  // Member variables:
+  rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr kf_feedback_enabled_pub_;
+  rclcpp::TimerBase::SharedPtr feedback_timer_;
 };
 
 // main
