@@ -16,7 +16,7 @@ class KFErrorCalculator : public rclcpp::Node
 {
 public:
     KFErrorCalculator()
-        : Node("kf_error_calculator"), msg_count_(0), msg_limit_(100)
+        : Node("kf_error_calculator"), msg_count_(0), msg_limit_(200)
     {
         kf_tracks_sub_ = this->create_subscription<multi_target_kf::msg::KFTracks>(
             "/kf/good_tracks", 10, std::bind(&KFErrorCalculator::collectData, this, std::placeholders::_1));
@@ -33,7 +33,7 @@ public:
 private:
     void collectData(const multi_target_kf::msg::KFTracks::SharedPtr msg)
     {
-        auto actual_pose_values = getActualPose();
+        auto actual_pose_values = getActualPose(msg->header.stamp);
         for (const auto &track : msg->tracks)
         {
             double x = track.pose.pose.position.x;
@@ -96,15 +96,16 @@ private:
         publisher->publish(msg);
     }
 
-    std::tuple<double, double, double> getActualPose()
+    std::tuple<double, double, double> getActualPose(const builtin_interfaces::msg::Time &kf_time)
     {
     
         geometry_msgs::msg::TransformStamped transform;
         try {
+        tf2::TimePoint tf_time = tf2_ros::fromMsg(kf_time);
         transform = tf_buffer_->lookupTransform(
             "observer/odom",        // target
             "target/base_link",    // source
-            tf2::TimePointZero,
+            tf_time,
             tf2::durationFromSec(1.0));
         }
 
