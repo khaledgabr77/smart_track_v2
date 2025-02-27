@@ -26,6 +26,7 @@ href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://w
   <depend>image_geometry</depend>
   <depend>opencv</depend>
   <depend>message_filters</depend>
+  <depend>nav_msgs</depend>
   <build_depend>multi_target_kf</build_depend>
   <exec_depend>multi_target_kf</exec_depend>
   <exec_depend>launch</exec_depend>

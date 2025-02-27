@@ -29,6 +29,7 @@ find_package(tf2_eigen REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 # Include directories
 include_directories(
   include
@@ -111,6 +112,7 @@ ament_target_dependencies(
   yolo_msgs
   multi_target_kf
   visualization_msgs
+  nav_msgs 
 )
 
 ament_target_dependencies(
@@ -129,6 +131,7 @@ ament_target_dependencies(
   yolo_msgs
   multi_target_kf
   visualization_msgs
+  nav_msgs 
 )
 
 ament_target_dependencies(
@@ -147,6 +150,7 @@ ament_target_dependencies(
   yolo_msgs
   multi_target_kf
   visualization_msgs
+  nav_msgs 
 )
 # Specify libraries to link a library or executable target against
 ament_target_dependencies(

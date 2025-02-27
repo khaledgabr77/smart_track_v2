@@ -49,6 +49,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <rclcpp/timer.hpp>
 #include <std_msgs/msg/int8.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 // TF2
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -247,6 +249,11 @@ public:
     lidar_rgb_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
       "/detected_object_pose", 10,
       std::bind(&SmartTrackNode::lidarRgbPoseCallback, this, _1));
+    
+    // Subscriber to odometry topic
+    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "/target/mavros/local_position/odom", rclcpp::QoS(10),
+      std::bind(&SmartTrackNode::odomCallback, this, std::placeholders::_1));
 
     // Message filters for KF + Lidar
     kf_tracks_filter_.subscribe(this, "/kf/good_tracks");
@@ -278,7 +285,16 @@ public:
       "kf_feedback_enabled", 
       rclcpp::QoS(10)
     );
+
     
+    // Create a publisher for the 'kf_feedback_enabled' topic
+    kf_path = this->create_publisher<nav_msgs::msg::Path>(
+      "kf_path", 
+      rclcpp::QoS(10)
+    );
+
+    odom_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/odom_pose_array", 10);
+  
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
@@ -288,6 +304,27 @@ public:
   }
 
 private:
+  void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
+      // Check if the message is valid
+      if (!msg) return;
+
+      // Initialize PoseArray message
+      geometry_msgs::msg::PoseArray odom_pose_array;
+      odom_pose_array.header.stamp = this->get_clock()->now();
+      odom_pose_array.header.frame_id = msg->header.frame_id;
+
+      // Extract pose from odometry
+      geometry_msgs::msg::Pose pose;
+      pose.position = msg->pose.pose.position;
+      pose.orientation = msg->pose.pose.orientation;
+
+      // Store the pose in the PoseArray
+      odom_pose_array.poses.push_back(pose);
+
+      // Publish the PoseArray
+      odom_pose_pub_->publish(odom_pose_array);
+  }
 
   /**
    * @brief For each track in KFTracks, transform it (pose+covariance) into the LiDAR frame,
@@ -646,6 +683,7 @@ private:
     latest_kftracks_msg_ = kftracks_msg;
     last_lidar_msg_      = lidar_msg;
 
+    updateAndPublishKFPath(kftracks_msg);
     // Transform each track's pose+cov to LiDAR frame and store
     processAndStoreTrackData(kftracks_msg);
   }
@@ -699,6 +737,9 @@ private:
           fused_pose_pub_->publish(kf_pose_array_opt.value());
           publishKFFeedbackEnabled(1);
           marker_array_pub_->publish(marker_array_);
+          // Publish path using KF pose array
+          
+
           // RCLCPP_INFO(this->get_logger(),
           // "[timerCallback] fused_pose_pub_ KF PUBLISHING.");
           if (debug_) {
@@ -757,6 +798,62 @@ private:
     kf_feedback_enabled_pub_->publish(msg);
   }
 
+  /**
+   * @brief Updates and publishes the KF path.
+   * 
+   * @param pose_array The new KF pose array to append to the path.
+   */
+  void updateAndPublishKFPath(const multi_target_kf::msg::KFTracks::ConstSharedPtr &kftracks_msg)
+  {
+      if (kftracks_msg->tracks.empty()) {
+          return;
+      }
+
+      // Initialize path message if not set
+      if (kf_path_msg_.header.frame_id.empty()) {
+          kf_path_msg_.header.frame_id = reference_frame_;
+      }
+
+      // Define maximum buffer size for the path
+      const size_t max_path_size = 10; // Adjust as needed
+
+      // Transform each KF track into a PoseStamped
+      for (const auto &track : kftracks_msg->tracks) {
+          geometry_msgs::msg::PoseStamped pose_stamped;
+          pose_stamped.header.stamp = this->get_clock()->now();
+          pose_stamped.header.frame_id = reference_frame_; // Ensure consistency
+
+          // Extract position from the KF track
+          pose_stamped.pose.position.x = track.pose.pose.position.x;
+          pose_stamped.pose.position.y = track.pose.pose.position.y;
+          pose_stamped.pose.position.z = track.pose.pose.position.z;
+
+          // Use identity quaternion for orientation (since tracking may not include rotation)
+          pose_stamped.pose.orientation.x = 0.0;
+          pose_stamped.pose.orientation.y = 0.0;
+          pose_stamped.pose.orientation.z = 0.0;
+          pose_stamped.pose.orientation.w = 1.0;
+
+          // Append to the path
+          kf_path_msg_.poses.push_back(pose_stamped);
+      }
+
+      // Keep only the last `max_path_size` poses
+      if (kf_path_msg_.poses.size() > max_path_size) {
+          kf_path_msg_.poses.erase(
+              kf_path_msg_.poses.begin(),
+              kf_path_msg_.poses.begin() + (kf_path_msg_.poses.size() - max_path_size)
+          );
+      }
+
+      // Update timestamp
+      kf_path_msg_.header.stamp = this->get_clock()->now();
+
+      // Publish the updated path
+      kf_path->publish(kf_path_msg_);
+  }
+
+
 private:
   // Parameters
   bool        debug_{false};
@@ -773,10 +870,15 @@ private:
   geometry_msgs::msg::PoseArray::SharedPtr objects_pose_msg_;
   multi_target_kf::msg::KFTracks::ConstSharedPtr latest_kftracks_msg_;
   sensor_msgs::msg::PointCloud2::ConstSharedPtr last_lidar_msg_;
+  nav_msgs::msg::Path kf_path_msg_;
+
 
   // Subscriptions
   rclcpp::Subscription<yolo_msgs::msg::DetectionArray>::SharedPtr detection_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lidar_rgb_pose_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  // Publisher for odometry poses as PoseArray
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr odom_pose_pub_;
 
   message_filters::Subscriber<multi_target_kf::msg::KFTracks> kf_tracks_filter_;
   message_filters::Subscriber<sensor_msgs::msg::PointCloud2>  lidar_sub_;
@@ -808,6 +910,9 @@ private:
 
   // Member variables:
   rclcpp::Publisher<std_msgs::msg::Int8>::SharedPtr kf_feedback_enabled_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr kf_path;
+
+  
 };
 
 // main
