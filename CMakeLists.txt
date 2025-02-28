@@ -46,7 +46,7 @@ add_executable(lidar_camera_fusion_with_detection src/lidar_camera_fusion_with_d
 add_executable(l2i_pose_node src/l2i_pose_node.cpp)
 add_executable(results src/results.cpp)
 add_executable(smart_track_node src/smart_track_node.cpp)
-
+add_executable(multi_smart_track_node src/multi_smart_track_node.cpp)
 # Link libraries
 target_link_libraries(depth_map_detection_localization 
   ${PCL_LIBRARIES} 
@@ -68,6 +68,12 @@ target_link_libraries(smart_track_node
   ${PCL_LIBRARIES} 
   ${OpenCV_LIBS} 
 )
+
+target_link_libraries(multi_smart_track_node 
+  ${PCL_LIBRARIES} 
+  ${OpenCV_LIBS} 
+)
+
 # Link additional libraries
 target_link_libraries(lidar_camera_fusion_with_detection
   ${OpenCV_LIBRARIES}
@@ -152,6 +158,26 @@ ament_target_dependencies(
   visualization_msgs
   nav_msgs 
 )
+
+ament_target_dependencies(
+  multi_smart_track_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  cv_bridge
+  OpenCV
+  pcl_conversions
+  pcl_ros
+  message_filters
+  yolo_msgs
+  multi_target_kf
+  visualization_msgs
+  nav_msgs 
+)
+
 # Specify libraries to link a library or executable target against
 ament_target_dependencies(
   lidar_camera_fusion_with_detection
@@ -205,6 +231,9 @@ install(TARGETS
   smart_track_node
   DESTINATION lib/${PROJECT_NAME})
 
+  install(TARGETS 
+  multi_smart_track_node
+  DESTINATION lib/${PROJECT_NAME})
 install(TARGETS 
   results
   DESTINATION lib/${PROJECT_NAME})

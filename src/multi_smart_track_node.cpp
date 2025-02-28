@@ -255,6 +255,16 @@ public:
       "/target/mavros/local_position/odom", rclcpp::QoS(10),
       std::bind(&SmartTrackNode::odomCallback, this, std::placeholders::_1));
 
+    // Subscriber to odometry topic
+    odom_sub1_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "/target1/mavros/local_position/odom", rclcpp::QoS(10),
+      std::bind(&SmartTrackNode::odomCallback1, this, std::placeholders::_1));
+    
+    // Subscriber to odometry topic
+    odom_sub2_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      "/target2/mavros/local_position/odom", rclcpp::QoS(10),
+      std::bind(&SmartTrackNode::odomCallback2, this, std::placeholders::_1));
+
     // Message filters for KF + Lidar
     kf_tracks_filter_.subscribe(this, "/kf/good_tracks");
     lidar_sub_.subscribe(this, "/observer/lidar_points");
@@ -294,7 +304,9 @@ public:
     );
 
     odom_pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/odom_pose_array", 10);
-  
+    odom_pose_pub1_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/odom_pose_array1", 10);
+    odom_pose_pub2_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/odom_pose_array2", 10);
+
     // Timer checks for new data and publishes if needed
     timer_ = this->create_wall_timer(
       std::chrono::milliseconds(100),
@@ -324,6 +336,50 @@ private:
 
       // Publish the PoseArray
       odom_pose_pub_->publish(odom_pose_array);
+  }
+
+  void odomCallback1(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
+      // Check if the message is valid
+      if (!msg) return;
+
+      // Initialize PoseArray message
+      geometry_msgs::msg::PoseArray odom_pose_array1;
+      odom_pose_array1.header.stamp = this->get_clock()->now();
+      odom_pose_array1.header.frame_id = msg->header.frame_id;
+
+      // Extract pose from odometry
+      geometry_msgs::msg::Pose pose;
+      pose.position = msg->pose.pose.position;
+      pose.orientation = msg->pose.pose.orientation;
+
+      // Store the pose in the PoseArray
+      odom_pose_array1.poses.push_back(pose);
+
+      // Publish the PoseArray
+      odom_pose_pub1_->publish(odom_pose_array1);
+  }
+
+    void odomCallback2(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
+      // Check if the message is valid
+      if (!msg) return;
+
+      // Initialize PoseArray message
+      geometry_msgs::msg::PoseArray odom_pose_array2;
+      odom_pose_array2.header.stamp = this->get_clock()->now();
+      odom_pose_array2.header.frame_id = msg->header.frame_id;
+
+      // Extract pose from odometry
+      geometry_msgs::msg::Pose pose;
+      pose.position = msg->pose.pose.position;
+      pose.orientation = msg->pose.pose.orientation;
+
+      // Store the pose in the PoseArray
+      odom_pose_array2.poses.push_back(pose);
+
+      // Publish the PoseArray
+      odom_pose_pub2_->publish(odom_pose_array2);
   }
 
   /**
@@ -877,8 +933,12 @@ private:
   rclcpp::Subscription<yolo_msgs::msg::DetectionArray>::SharedPtr detection_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr lidar_rgb_pose_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub1_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub2_;
   // Publisher for odometry poses as PoseArray
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr odom_pose_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr odom_pose_pub1_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr odom_pose_pub2_;
 
   message_filters::Subscriber<multi_target_kf::msg::KFTracks> kf_tracks_filter_;
   message_filters::Subscriber<sensor_msgs::msg::PointCloud2>  lidar_sub_;
